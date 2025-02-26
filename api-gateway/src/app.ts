@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 
-app.use('/api/v1/users', createProxyMiddleware({target:"http://localhost:2001",changeOrigin:true}));
+app.use('/api/v1/users', createProxyMiddleware({target:"https://express-microservice-1.onrender.com/",changeOrigin:true}));
 
 
 app.get('/',(req : Request,res : Response , next : NextFunction) =>{
