@@ -1,6 +1,7 @@
-import express from 'express';  
+import express,{Request,Response,NextFunction} from 'express';  
 import dotenv from 'dotenv';
 import {createProxyMiddleware} from 'http-proxy-middleware'
+
 dotenv.config();
 
 
@@ -11,6 +12,10 @@ app.use(express.json());
 
 app.use('/api/v1/users', createProxyMiddleware({target:"http://localhost:2001",changeOrigin:true}));
 
+
+app.get('/',(req : Request,res : Response , next : NextFunction) =>{
+    res.send('API Gateway running');
+}   );
 
 
 
