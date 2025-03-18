@@ -1,6 +1,5 @@
-import bycrpt from 'bcrypt'
-import mongoose, {Schema , Document} from "mongoose";
-
+import bycrpt from 'bcrypt';
+import mongoose, {Document, Schema} from "mongoose";
 
 
 // User Roles
@@ -30,6 +29,7 @@ const AddressSchema = new Schema<IAddress>({
 
 
 export interface IUser extends Document{
+    _id: string;
     name : string,
     email : string ,
     password: string,
@@ -37,24 +37,27 @@ export interface IUser extends Document{
     profileImage : string,
     country : string,
     role : UserRole,
+    refreshToken : string , 
     address : IAddress,
     orderHistory :[mongoose.Types.ObjectId],
     favoriteProducts : [mongoose.Types.ObjectId],
     kart : [mongoose.Types.ObjectId],
     reviews : [mongoose.Types.ObjectId],
-    isDeleted : boolean
+    isDeleted : boolean,
+    isValidPassword(password: string): Promise<boolean>;
 }
 
 // Main User Schema
-const UserSchema = new Schema(
+const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    phone: { type: String, required: true, unique: true },
+    phone: { type: String, required: false, unique: true,sparse : true },
     profileImage: { type: String, default: null },
-    country: { type: String, required: true },
+    country: { type: String, required: false , default : "india" },
     role: { type: String, enum: ["buyer", "seller", "admin"], default: "buyer" },
+    refreshToken : {type : String, default : " " },
     address: [AddressSchema],
     // Buyer Fields
     orderHistory: [{ type: Schema.Types.ObjectId}],
@@ -72,12 +75,11 @@ UserSchema.pre<IUser>('save' , async function (next){
 
     if(!this.isModified('password')) {return next()}
 
-     //convert the blank password hased password
+     //convert the blank password hashed password
     
      const salt = await bycrpt.genSalt(10)
 
-     const hasedPassword  : string = await bycrpt.hash(this.password,salt)
-     this.password = hasedPassword
+     this.password = await bycrpt.hash(this.password, salt)
      next()
     
    }catch(error : any){
@@ -86,6 +88,10 @@ UserSchema.pre<IUser>('save' , async function (next){
     
 });
 
+
+UserSchema.methods.isValidPassword = async function (password : string):Promise<boolean> {
+   return await bycrpt.compare(password , this.password);
+}
 
 
 export const User = mongoose.model<IUser>("User", UserSchema);

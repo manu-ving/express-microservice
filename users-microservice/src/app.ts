@@ -1,77 +1,26 @@
-import { ExpressAdapter } from "@bull-board/express";
-import { Queue } from "bullmq";
+import cors from 'cors';
 import dotenv from "dotenv";
-import express, { ErrorRequestHandler, NextFunction, Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import CreateHttpError from "http-errors";
-
-import AuthUserController from "./controller/UserController";
+import { apiLimiter, verifyApiKey } from './helpers/RequestLimiter';
 import ConnectToDatabase from "./mongoose/mongoose.connection";
-import { connection } from "./redis/bull_mq.connection";
-import { RegisterationValidator } from "./validator/Registeration.validator";
-import { myWorker } from "./worker/OrderWorker";
-
+import routers from './routes/Auth.Routes';
+import { errorHandler } from './routes/ErrorHandling';
+import {myWorker} from "./worker/OrderWorker";
+import productRouter from "./routes/Product.routes";
+import productRoutes from "./routes/Product.routes";
 const app = express();
-
-//Error Handler Middleware 
-const errorHandler : ErrorRequestHandler = (err, req, res, next) => {   
-    res.status(err.status || 500).
-    json({
-        error: {
-            status: err.status || 500,
-            message: err.message
-        }
-    }); 
-};
-const orderQueue = new Queue('order-sample', { connection });
-const serverAdapter = new ExpressAdapter();
-
 dotenv.config();
 
 app.use(express.json());
+// ✅ Apply middleware only to /api/v1 routes
 
-serverAdapter.setBasePath("/admin/queues");
+app.use(cors())
+app.use('/api/v1', verifyApiKey, apiLimiter, routers);
+// TODO implement auth checking
+app.use('/api/v1/products',verifyApiKey,apiLimiter,productRoutes);
 
-app.use("/admin/queues", serverAdapter.getRouter());
 
-app.post('/order', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        // Validate request data
-        const order = await RegisterationValidator.validateAsync(req.body);
-
-        // Add job to queue with order data
-        const job = await orderQueue.add('new-order', order);
-
-         myWorker()
-
-        res.json({ 
-            success: true, 
-            message: "Order processing job added to queue", 
-            jobId: job.id 
-        });
-
-    } catch (error) {
-        next(error);  // Passes error to Express error handler
-    }
-})
-
-// ✅ Fix User Registration Endpoint
-app.post('/api/v1/register', (req : Request,res : Response ,next: NextFunction) => {
-   console.log('Register User');
-    AuthUserController.createUser(req,res,next);  
-  // res.send('Register User');   
-}
-);
-
-app.post('/login', (req: Request, res: Response) => {
-    res.send('Users Login service running');
-});
-
-// 404 Handling
-app.use((req: Request, res: Response, next: NextFunction) => {
-    next(CreateHttpError(404, `Not Found from the user : ${req.baseUrl}`));
-});
-
-app.use(errorHandler);
 
 // ✅ Handle Database Connection Errors
 ConnectToDatabase()
@@ -79,9 +28,23 @@ ConnectToDatabase()
         const PORT = process.env.PORT || 3001;
         app.listen(PORT, () => {
             console.log(`Users service running on port ${PORT}`);
+            //start listening for que jobs
+            myWorker();
+
+            //this
         });
     })
     .catch((err) => {
         console.error("Database connection failed:", err);
         process.exit(1);
     });
+
+
+
+    // 404 Handling
+app.use((req: Request, res: Response, next: NextFunction) => {
+    next(CreateHttpError(404, `Not Found from the user : ${req.baseUrl}`));
+});
+
+app.use(errorHandler);
+
